@@ -1,6 +1,5 @@
 # Control Plane: Validation + Classification
 
-
 security_events = [
     {"risk_score": 20, "input_valid": True, "checks": ["validate", "verify"]},
     {"risk_score": 65, "input_valid": True, "checks": ["validate", "verify"]},
