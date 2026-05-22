@@ -149,3 +149,127 @@ Next, the system evaluates optional nested checks within each event, allowing fo
 Finally, it applies deterministic policy thresholds to assign a decision—ALLOW, MONITOR, or BLOCK—ensuring consistent and explainable enforcement.
 
 This design demonstrates controlled data processing, layered validation, and policy-driven decision-making, which aligns with secure system design principles.        
+
+
+---
+
+# 📓 Identity Control Plane Diagnostics Notebook
+
+---
+
+## 🔹 Section 1: Purpose (Simple Explanation)
+
+**Goal:**  
+Build a system that automatically finds where code breaks so you don’t have to search manually.
+
+**Core Idea:**
+
+> *“I don’t search for errors — I build systems that locate them for me.”*
+
+---
+
+## 🔹 Section 2: Full Working Code
+
+```python
+import traceback
+
+# ==========================================
+# 1. DIAGNOSTIC HARNESS
+# ==========================================
+def run_security_test(target_function, *params):
+    print(f"\n--- Testing Parameters: {params} ---")
+
+    try:
+        result = target_function(*params)
+        print(f"✅ PASS: Output = {result}")
+
+        return {
+            "status": "PASS",
+            "result": result
+        }
+
+    except Exception as e:
+        tb = traceback.extract_tb(e.__traceback__)
+        filename, line_number, function_name, text = tb[-1]
+
+        print("🚨 FAIL — ERROR LOCATED AUTOMATICALLY")
+        print(f"  [Type] {type(e).__name__}")
+        print(f"  [Msg]  {e}")
+        print(f"  [File] {filename}")
+        print(f"  [Line] {line_number}")
+        print(f"  [Func] {function_name}")
+        print(f"  [Code] {(text or '').strip()}")
+
+        return {
+            "status": "FAIL",
+            "error": str(e)
+        }
+
+
+# ==========================================
+# 2. IDENTITY CONTROL PLANE
+# ==========================================
+class IdentityControlPlane:
+
+    @staticmethod
+    def evaluate_access_request(identity_token, confidence_score):
+
+        # Missing token check
+        if not identity_token or identity_token == "MISSING":
+            return "DECISION: REJECT (Missing Identity Token)"
+
+        # Type check
+        if not isinstance(confidence_score, (int, float)):
+            return "DECISION: REJECT (Invalid score type)"
+
+        # Range check
+        if confidence_score < 0 or confidence_score > 100:
+            return "DECISION: BLOCK (Out-of-range score)"
+
+        # Threshold logic
+        if confidence_score < 75:
+            return "DECISION: DENY (Low trust)"
+
+        return "DECISION: ALLOW (Trusted)"
+
+
+# ==========================================
+# 3. TEST RUNS
+# ==========================================
+if __name__ == "__main__":
+    run_security_test(IdentityControlPlane.evaluate_access_request, "user_123", 90)
+    run_security_test(IdentityControlPlane.evaluate_access_request, "MISSING", 95)
+    run_security_test(IdentityControlPlane.evaluate_access_request, "user_123", "BAD_INPUT")
+    run_security_test(IdentityControlPlane.evaluate_access_request, "user_123", 999)
+
+    ## 🔹 Section 3: Concepts Breakdown (12th Grade Level)
+
+---
+
+### ✅ `import traceback`
+
+- Loads a built-in Python tool  
+- Helps find **where the error happened**
+
+👉 Think:  
+“Show me the exact line that broke.”
+
+---
+
+### ✅ `def run_security_test(...)`
+
+- `def` = define a function  
+- This function runs your tests automatically  
+
+👉 Think:  
+“Test this code for me”
+
+---
+
+### ✅ `*params`
+
+- Accepts multiple inputs  
+- Example:
+
+```python
+("user_123", 90)
