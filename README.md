@@ -35,4 +35,6 @@ This project supports progression into **Information Security Engineering** with
 - System-level control design
 - Policy-driven security automation
 
+## Security Design
 
+See [Threat Model](./threat-model.md)
