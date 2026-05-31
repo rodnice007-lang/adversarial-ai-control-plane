@@ -4,7 +4,7 @@ import re
 import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ContinuousControlPlane:
@@ -93,14 +93,14 @@ class ContinuousControlPlane:
             "event_id": pid,
             "state": state,
             "message": msg,
-            "time": datetime.utcnow().isoformat()
+            "time": datetime.now(timezone.utc).isoformat()
         }))
 
     def _log_internal_error(self, code: str, detail: str):
         print(json.dumps({
             "error": code,
             "detail": detail,
-            "time": datetime.utcnow().isoformat()
+            "time": datetime.now(timezone.utc).isoformat()
         }))
 
     async def _route_to_quarantine(self, packet: Dict[str, Any]):
@@ -112,3 +112,4 @@ class ContinuousControlPlane:
     def shutdown(self):
         self.is_running = False
         self.executor.shutdown(wait=True)
+        
