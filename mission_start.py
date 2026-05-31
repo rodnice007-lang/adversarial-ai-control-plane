@@ -1,4 +1,4 @@
-# Control Plane: Validation + Classification
+# Control Plane: Validation + Classification + Enforcement
 
 security_events = [
     {"risk_score": 20, "input_valid": True, "checks": ["validate", "verify"]},
@@ -8,37 +8,37 @@ security_events = [
     {"input_valid": True, "checks": ["validate"]}
 ]
 
-
 for idx, event in enumerate(security_events):
 
     print(f"\nProcessing Event {idx}")
 
-    # ✅ Class 6: nested checks (ADD THIS)
+    # Nested checks
     if "checks" in event:
         for check in event["checks"]:
             print(f"Running check: {check}")
 
-    # ✅ VALIDATION (keep only one version)
-
+    # VALIDATION
     if "risk_score" not in event:
-        print("⚠️ Validation Failed: Missing risk_score → Reject")
+        print("⚠️ Validation Failed: Missing risk_score → REJECT")
         continue
 
     if not event["input_valid"]:
-        print("❌ Validation Failed: Invalid input → Reject")
+        print("❌ Validation Failed: Invalid input → REJECT")
         continue
 
-    # ✅ SAFE TO PROCESS
+    # SAFE TO PROCESS
     score = event["risk_score"]
     print(f"✅ Validation Passed | Risk Score: {score}")
 
-    # ✅ CLASSIFICATION + ENFORCEMENT
+    # ✅ ENFORCEMENT LAYER
     if score > 80:
+        action = "BLOCK"
         print("🚫 Threat Level: HIGH")
-        print("Action: BLOCK")
     elif score > 50:
+        action = "ISOLATE"
         print("⚠️ Threat Level: MEDIUM")
-        print("Action: MONITOR")
     else:
+        action = "ALLOW"
         print("✅ Threat Level: LOW")
-        print("Action: ALLOW")
+
+    print(f"✅ Enforcement Action: {action}")
