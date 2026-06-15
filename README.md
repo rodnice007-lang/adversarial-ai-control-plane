@@ -1,40 +1,21 @@
-# adversarial-ai-control-plane
-
-An AI Security Gateway for detecting and enforcing policy against adversarial misuse.
-
-> Status: In active development
+# Adversarial AI Control Plane v3.5
 
 ## Overview
-A Python-based control layer that sits between external inputs and AI systems, 
-providing monitoring, validation, and policy enforcement to reduce risk from adversarial interactions.
+This project simulates a stateful AI security control plane.
 
-## Purpose
-Modern AI systems introduce new attack surfaces such as:
-- Prompt injection attacks
-- Adversarial misuse and jailbreaks
-- Unauthorized data exposure
-- Unvalidated system interactions
+It intercepts requests, evaluates behavior, assigns risk, and enforces decisions before passing data to downstream systems.
 
-This project is deployed as a security gateway within cloud and enterprise environments, 
-with an initial focus on Azure-based implementation. It is positioned between external 
-inputs (users, APIs, and untrusted data sources) and AI systems to validate all inbound 
-interactions and enforce policy before access is granted.
+## Core Features
+- Stateful request tracking
+- Risk scoring (0–100)
+- Role-based access control (RBAC)
+- MFA enforcement
+- 4-state decision system
 
-## Planned Features
-**Core Capabilities:**
-- Policy-based validation of external inputs
-- Risk scoring and state tracking using Python
-- Detection of adversarial patterns
-- Integration with Azure cloud security environments
-- Automated response and enforcement mechanisms
+## Decision States
+- REJECT → block malicious requests
+- ISOLATE → restrict suspicious activity
+- ENFORCE → apply policy controls
+- ALLOW → permit valid access
 
-## Direction
-This project supports progression into **Information Security Engineering** with a focus on:
-- Cloud and AI security
-- Zero Trust principles
-- System-level control design
-- Policy-driven security automation
-
-## Security Design
-
-See [Threat Model](./threat-model.md)
+## Project Structure

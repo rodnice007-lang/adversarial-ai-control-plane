@@ -273,3 +273,32 @@ if __name__ == "__main__":
 
 ```python
 ("user_123", 90)
+
+# Project Notes
+
+## Overview
+Adversarial AI Control Plane (v3.5)
+
+## Purpose
+- Detect malicious behavior
+- Track requests over time
+- Enforce security decisions
+
+## Key Concepts
+- Stateful tracking (RATE_LIMIT_WINDOW)
+- Risk scoring (0–100)
+- 4-state system:
+  - REJECT
+  - ISOLATE
+  - ENFORCE
+  - ALLOW
+
+## Improvements Added
+- Docker containerization
+- Test harness validation
+- GitHub version control
+
+## Next Steps
+- Docker Compose
+- Multi-container networking
+- Cloud deployment (Azure)
