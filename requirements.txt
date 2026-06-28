@@ -1,0 +1,9 @@
+# Azure Core Authentication and Identity
+azure-identity>=1.16.0
+
+# Azure Resource Management (for handling cloud controls)
+azure-mgmt-resource>=23.1.0
+
+# Any asynchronous utilities if needed (built-in asyncio doesn't need a plugin,
+# but if you use HTTP clients, aiohttp is great)
+aiohttp>=3.9.5
