@@ -1,0 +1,5 @@
+SCRIPT STARTED
+RUNNING TESTS
+
+📡 Basic Test
+RESULT → {'decision': 'ALLOW', 'reason': 'Clean request'}
