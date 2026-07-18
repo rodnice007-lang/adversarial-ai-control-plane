@@ -223,6 +223,7 @@ Infrastructure remains separate from AI execution and is designed to support gov
 
 ## Project Structure
 
+```text
 adversarial-ai-control-plane/
 ├── README.md
 ├── requirements.txt
