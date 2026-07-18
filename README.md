@@ -254,8 +254,6 @@ adversarial-ai-control-plane/
 - **scripts/** – Helper scripts for testing, automation, and operations.
 ```
 
----
-
 ## Project Statement
 
 > I built an asynchronous adversarial AI control plane that intercepts all inputs and outputs, applies deterministic validation and tiered policy enforcement, isolates malicious behavior, and records every decision through structured auditing. Security decisions are computed outside the model using independently governed control logic, ensuring they remain explainable, auditable, and resistant to model manipulation.
