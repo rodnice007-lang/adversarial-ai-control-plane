@@ -224,44 +224,33 @@ Infrastructure remains separate from AI execution and is designed to support gov
 ## Project Structure
 
 adversarial-ai-control-plane/
-│
 ├── README.md
-├── LICENSE
 ├── requirements.txt
-│
+├── control_plane/
+│   └── security_control.py
 ├── docs/
-│   ├── threat-model.md
-│   ├── architecture.md
-│   ├── security-controls.md
-│   └── deployment-guide.md
-│
-├── src/
-│   ├── control_plane/
-│   │   ├── input_engine.py
-│   │   ├── risk_fusion.py
-│   │   ├── enforcement.py
-│   │   ├── quarantine.py
-│   │   └── audit_logger.py
-│   │
-│   ├── validation/
-│   ├── detection/
-│   ├── monitoring/
-│   └── identity/
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── adversarial/
-│
-├── deployment/
-│   ├── docker/
-│   └── azure/
-│
-├── infrastructure/
-│   ├── opentofu/
-│   └── terraform/
-│
-└── logs/
+│   ├── README.md
+│   ├── notes.md
+│   └── threat-model.md
+├── infra/
+│   └── Dockerfile
+├── scripts/
+│   └── open-ai-project.sh
+└── src/
+    ├── mission_start.py
+    ├── mission_start_v1.py
+    └── output.txt
+```
+
+### Repository Organization
+
+- **README.md** – Project overview, architecture, deployment model, and security philosophy.
+- **requirements.txt** – Python package dependencies.
+- **control_plane/** – Core security control plane implementation.
+- **src/** – Supporting application source code.
+- **docs/** – Threat models, architecture notes, and project documentation.
+- **infra/** – Infrastructure provisioning and deployment configurations.
+- **scripts/** – Helper scripts for testing, automation, and operations.
 ```
 
 ---
