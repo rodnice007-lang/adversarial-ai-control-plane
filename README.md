@@ -252,7 +252,6 @@ adversarial-ai-control-plane/
 - **docs/** – Threat models, architecture notes, and project documentation.
 - **infra/** – Infrastructure provisioning and deployment configurations.
 - **scripts/** – Helper scripts for testing, automation, and operations.
-```
 
 ## Project Statement
 
