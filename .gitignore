@@ -2,3 +2,21 @@
 *.save
 .DS_Store
 __pycache__/
+
+# Python environment caches
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# Infrastructure and secret execution tokens
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+aascp_deployment.tfplan
+
+# Local operational log dumps
+src/output.txt
+*.log
