@@ -1,16 +1,65 @@
-# Adversarial AI Security Control Plane v3.5 Enhanced
+# Adversarial AI Control Plane
 
 ## Overview
 
-The Adversarial AI Security Control Plane (AASCP) is a stateful AI security gateway that intercepts requests and responses before they reach downstream systems.
+The Adversarial AI Control Plane is a programmable governance, security, and orchestration layer designed to sit between users, applications, and AI inference engines.
 
-Rather than allowing an AI model to make security decisions about itself, the control plane performs independent validation, classification, policy enforcement, quarantine handling, and audit logging outside the model's reasoning process.
+Inspired by Software-Defined Networking (SDN) principles, the platform separates policy enforcement and security evaluation from model execution. Rather than relying on an AI model to evaluate its own behavior, the control plane performs independent inspection, validation, policy enforcement, routing, logging, and auditing before requests reach downstream models or services.
 
-The system evaluates behavioral and security signals, calculates risk, applies deterministic policy decisions, and records every action for traceability and governance.
+The project explores how security controls can be applied to AI systems using deterministic policies, transparent decision-making, and infrastructure automation.
 
-> **Security decisions happen outside the AI, not inside it.**
+> **Security decisions occur outside the model, not inside it.**
 
 ---
+
+## Homelab & Development Environment
+
+This project is developed and tested in a dual-node homelab environment designed to support cybersecurity, AI governance, infrastructure automation, and cloud learning.
+
+### Development Workstation
+
+**MSI Vector 16 HX**
+
+- Windows 11
+- WSL2 Ubuntu
+- VS Code
+- Git
+- Terraform
+- Azure CLI
+- Kali Linux VM
+- Wireshark
+- Packet Tracer
+
+### Infrastructure Node
+
+**MINISFORUM AI X1 Pro-470**
+
+- Windows 11
+- WSL2 Ubuntu
+- Docker
+- Control Plane Services
+- Automation Workloads
+- Persistent Infrastructure
+
+### Storage Layer
+
+**Samsung T7 2TB**
+
+- ISO repository
+- Backup archives
+- Lab exports
+- Documentation
+
+### Cloud Layer
+
+**Microsoft Azure**
+
+- Terraform-managed resources
+- AZ-104 learning environment
+- Identity and governance experiments
+- Hybrid cloud testing
+
+
 
 ## Security Architecture
 
