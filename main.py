@@ -336,4 +336,4 @@ async def healthz():
     return {"status": "ok"}
 
 
-feat: wire continuous_control_plane identity check + add Ollama-native endpoints for Open WebUI
+
