@@ -81,3 +81,5 @@ if __name__ == "__main__":
 
     print("\n--- Pipeline Turn Result ---")
     print(out1)
+
+   chore: archive dead security_control.py stub (unused, always returns PASS)
