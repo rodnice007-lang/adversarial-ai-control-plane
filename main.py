@@ -177,6 +177,91 @@ def run_identity_policy_check(role: str, prompt: str) -> dict:
     )
 
 
+def extract_latest_user_message(messages: list) -> str:
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            return msg.get("content", "")
+    return ""
+
+
+@app.get("/api/tags")
+async def list_models(role: str = Depends(require_role("admin", "user"))):
+    """Open WebUI calls this to populate the model dropdown -- pure
+    passthrough, no scanning needed since nothing here is user-generated
+    content."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(f"{OLLAMA_HOST}/api/tags")
+    return response.json()
+
+
+@app.get("/api/version")
+async def version():
+    """Open WebUI pings this on connect to confirm it's talking to
+    something Ollama-shaped."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(f"{OLLAMA_HOST}/api/version")
+    return response.json()
+
+
+@app.post("/api/chat")
+async def ollama_native_chat(
+    request: Request,
+    api_key: str = Depends(get_api_key),
+    role: str = Depends(require_role("admin", "user")),
+):
+    """Ollama-native chat shape (messages array in, message.content out),
+    matching what Open WebUI's "Ollama" connection type expects. Forces
+    stream=False regardless of what the client asked for -- everything
+    gets scanned before it's forwarded, so there's no partial response to
+    stream until the model is done generating."""
+    if not check_rate_limit(hash_key(api_key)):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+
+    body = await request.json()
+    messages = body.get("messages", [])
+    prompt = extract_latest_user_message(messages)
+    if not prompt:
+        raise HTTPException(status_code=400, detail="no user message found")
+
+    policy_result = run_identity_policy_check(role, prompt)
+    logger.info("identity policy decision: %s (%s)", policy_result["decision"], policy_result["reason"])
+    if policy_result["decision"] == "REJECT":
+        raise HTTPException(status_code=403, detail=policy_result["reason"])
+    if policy_result["decision"] == "ISOLATE":
+        isolate_model_network()
+        raise HTTPException(status_code=403, detail=policy_result["reason"])
+
+    sanitized_prompt, results_valid, results_score = scan_prompt(scanners, prompt)
+    log_borderline_scores(results_score)
+
+    if not all(results_valid.values()):
+        logger.warning("blocked prompt, scores=%s", results_score)
+        isolate_model_network()
+        raise HTTPException(
+            status_code=403,
+            detail={"blocked": True, "scores": results_score},
+        )
+
+    # Replace the latest user message with the sanitized version before
+    # forwarding -- keeps prior conversation turns intact for context.
+    sanitized_messages = list(messages)
+    for i in range(len(sanitized_messages) - 1, -1, -1):
+        if sanitized_messages[i].get("role") == "user":
+            sanitized_messages[i] = {**sanitized_messages[i], "content": sanitized_prompt}
+            break
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json={
+                "model": body.get("model", DEFAULT_MODEL),
+                "messages": sanitized_messages,
+                "stream": False,
+            },
+        )
+    return response.json()
+
+
 @app.post("/v1/chat")
 async def chat(
     request: Request,
@@ -251,4 +336,4 @@ async def healthz():
     return {"status": "ok"}
 
 
-   feat: wire continuous_control_plane identity check into chat endpoint
+feat: wire continuous_control_plane identity check + add Ollama-native endpoints for Open WebUI
