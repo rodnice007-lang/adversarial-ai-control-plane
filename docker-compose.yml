@@ -1,0 +1,57 @@
+﻿
+networks:
+  ai_control_plane:
+    driver: bridge
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-engine
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai_control_plane
+
+  llm-guard:
+    image: laiyer/llm-guard-api:latest
+    container_name: llm-guard-api
+    ports:
+      - "8000:8000"
+    networks:
+      - ai_control_plane
+
+  fastapi-firewall:
+    build: .
+    container_name: fastapi-proxy-firewall
+    ports:
+      - "8080:8080"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - LLM_GUARD_URL=http://llm-guard:8000
+    depends_on:
+      - ollama
+      - llm-guard
+    networks:
+      - ai_control_plane
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://fastapi-firewall:8080/v1
+      - OPENAI_API_KEY=unused
+    volumes:
+      - open_webui_data:/app/backend/data
+    depends_on:
+      - fastapi-firewall
+    networks:
+      - ai_control_plane
+
+volumes:
+  ollama_data:
+  open_webui_data:
+
