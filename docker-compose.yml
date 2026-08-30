@@ -1,57 +1,60 @@
-﻿
 networks:
-  ai_control_plane:
+  edge:
     driver: bridge
-
+  model-internal:
+    driver: bridge
+    internal: true   # ollama has no route out except through control-plane, even on one host
+  state-internal:
+    driver: bridge
+    internal: true   # redis lives here only -- never bridged to edge or model-internal
+ 
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama-engine
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - ai_control_plane
-
-  llm-guard:
-    image: laiyer/llm-guard-api:latest
-    container_name: llm-guard-api
-    ports:
-      - "8000:8000"
-    networks:
-      - ai_control_plane
-
-  fastapi-firewall:
+  control-plane:
     build: .
-    container_name: fastapi-proxy-firewall
+    container_name: control-plane
+    networks:
+      - edge
+      - model-internal
+      - state-internal
     ports:
-      - "8080:8080"
+      - "8443:8443"
     environment:
-      - OLLAMA_URL=http://ollama:11434
-      - LLM_GUARD_URL=http://llm-guard:8000
+      - OLLAMA_HOST=http://ollama:11434
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set -- no default}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:?ADMIN_API_KEY must be set -- no default}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-qwen2.5:3b}
+    volumes:
+      - ${PROJECT_DATA_PATH:-./data}/logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # needed for the isolation trigger
     depends_on:
       - ollama
-      - llm-guard
+      - redis
+ 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
     networks:
-      - ai_control_plane
-
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: open-webui
-    ports:
-      - "3000:8080"
-    environment:
-      - OPENAI_API_BASE_URL=http://fastapi-firewall:8080/v1
-      - OPENAI_API_KEY=unused
+      - model-internal   # deliberately NOT on edge -- unreachable except via control-plane
     volumes:
-      - open_webui_data:/app/backend/data
-    depends_on:
-      - fastapi-firewall
+      - ${PROJECT_DATA_PATH:-./data}/ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]   # RTX 5070 Ti -- requires NVIDIA CUDA on WSL2 set up in Docker Desktop
+    # no "ports:" block -- never publish this to the host or LAN
+ 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set -- no default}
     networks:
-      - ai_control_plane
+      - state-internal   # deliberately NOT on edge or model-internal
+    volumes:
+      - ${PROJECT_DATA_PATH:-./data}/redis:/data
+    # no "ports:" block -- Redis is never exposed to the host or LAN
 
-volumes:
-  ollama_data:
-  open_webui_data:
-
+    feat: add RBAC/Redis isolation networks, GPU reservation
