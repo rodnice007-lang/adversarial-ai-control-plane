@@ -6,4 +6,3 @@ llm-guard==0.3.15
 redis==5.0.8
 
 
-feat: add redis, docker, llm-guard deps for RBAC and isolation trigger
