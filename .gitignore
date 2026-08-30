@@ -9,7 +9,7 @@ __pycache__/
 .venv/
 env/
 venv/
-
+.env
 # Infrastructure and secret execution tokens
 .terraform/
 *.tfstate
