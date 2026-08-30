@@ -20,3 +20,4 @@ aascp_deployment.tfplan
 # Local operational log dumps
 src/output.txt
 *.log
+data/
