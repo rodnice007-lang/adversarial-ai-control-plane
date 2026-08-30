@@ -1,64 +1,78 @@
 import os
 import httpx
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="Adversarial AI Control Plane Firewall")
+app = FastAPI(title="Adversarial AI Control Plane Proxy")
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
-LLM_GUARD_URL = os.getenv("LLM_GUARD_URL", "http://llm-guard:8000")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama-engine:11434")
+LLM_GUARD_URL = os.getenv("LLM_GUARD_URL", "http://llm-guard-api:8000")
 
-@app.get("/")
-def read_root():
-    return {"status": "Firewall Online"}
-
-@app.get("/v1/models")
-async def list_models():
-    """Proxy model requests from Open WebUI to Ollama."""
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(f"{OLLAMA_URL}/api/tags")
-            data = resp.json()
-            models = [
-                {"id": m["name"], "object": "model", "owned_by": "ollama"}
-                for m in data.get("models", [])
-            ]
-            return {"object": "list", "data": models}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+# Basic signature blocklist for direct prompt injection vectors
+INJECTION_SIGNATURES = [
+    "ignore all previous instructions",
+    "ignore previous instructions",
+    "reveal system environment",
+    "system environment variables",
+    "override system prompt",
+]
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    """Intercept, inspect, and stream/forward requests to Ollama."""
     body = await request.json()
-    model = body.get("model", "llama3.2")
     messages = body.get("messages", [])
-    is_stream = body.get("stream", False)
-
-    # Extract user prompt for logging
+    
+    # Extract latest user prompt
     user_prompt = ""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             user_prompt = msg.get("content", "")
             break
 
-    print(f"[FIREWALL LOG] Inspecting Prompt (Stream={is_stream}): '{user_prompt[:60]}...'")
+    # 1. Local Pattern Inspection
+    prompt_lower = user_prompt.lower()
+    for signature in INJECTION_SIGNATURES:
+        if signature in prompt_lower:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": {
+                        "message": f"Security Block: Prompt injection signature detected ('{signature}')",
+                        "type": "adversarial_prompt_detected",
+                        "code": 403
+                    }
+                }
+            )
 
-    client = httpx.AsyncClient(timeout=120.0)
+    # 2. LLM Guard API Sanity Scan
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            guard_resp = await client.post(
+                f"{LLM_GUARD_URL}/analyze/prompt",
+                json={"prompt": user_prompt}
+            )
+            if guard_resp.status_code == 200:
+                guard_data = guard_resp.json()
+                if guard_data.get("is_valid") is False:
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": {
+                                "message": "Security Block: LLM Guard flagged unsafe prompt.",
+                                "type": "llm_guard_rejection",
+                                "code": 403
+                            }
+                        }
+                    )
+    except Exception:
+        # Fail-closed or fallback logging can be added here
+        pass
 
-    if is_stream:
-        req = client.build_request("POST", f"{OLLAMA_URL}/v1/chat/completions", json=body)
-        res = await client.send(req, stream=True)
-        return StreamingResponse(
-            res.aiter_raw(),
-            status_code=res.status_code,
-            headers=dict(res.headers)
+    # 3. Forward Clean Prompt to Ollama Engine
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        ollama_resp = await client.post(
+            f"{OLLAMA_URL}/v1/chat/completions",
+            json=body
         )
-    else:
-        try:
-            ollama_resp = await client.post(f"{OLLAMA_URL}/v1/chat/completions", json=body)
-            await client.aclose()
-            return JSONResponse(status_code=ollama_resp.status_code, content=ollama_resp.json())
-        except Exception as e:
-            await client.aclose()
-            raise HTTPException(status_code=502, detail=f"Proxy Error connecting to Ollama: {str(e)}")
+        return JSONResponse(status_code=ollama_resp.status_code, content=ollama_resp.json())
+    
