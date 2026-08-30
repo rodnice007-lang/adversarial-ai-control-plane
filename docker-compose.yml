@@ -57,4 +57,4 @@ services:
       - ${PROJECT_DATA_PATH:-./data}/redis:/data
     # no "ports:" block -- Redis is never exposed to the host or LAN
 
-    feat: add RBAC/Redis isolation networks, GPU reservation
+
