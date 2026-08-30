@@ -223,4 +223,4 @@ control-plane/
 docker compose up --build
 curl -X POST localhost:8443/v1/chat -d '{"prompt": "hello"}'
 
-docs: add operational build notes (RBAC, calibration, roadmap)
+
