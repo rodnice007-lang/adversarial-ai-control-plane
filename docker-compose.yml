@@ -1,13 +1,19 @@
+# Active development target: MSI Vector 16 HX (Windows 11 Pro, RTX 5070 Ti).
+# Docker Desktop's WSL2 backend runs these containers -- see README for the
+# isolation-trigger caveat that comes with that. The Minisforum becomes the
+# 24/7 production host later, once Network+ is done -- see README roadmap.
+# PROJECT_DATA_PATH should point at wherever project data lives on this host.
+
 networks:
   edge:
     driver: bridge
   model-internal:
     driver: bridge
-    internal: true   # ollama has no route out except through control-plane, even on one host
+    internal: true
   state-internal:
     driver: bridge
-    internal: true   # redis lives here only -- never bridged to edge or model-internal
- 
+    internal: true
+
 services:
   control-plane:
     build: .
@@ -26,16 +32,16 @@ services:
       - DEFAULT_MODEL=${DEFAULT_MODEL:-qwen2.5:3b}
     volumes:
       - ${PROJECT_DATA_PATH:-./data}/logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # needed for the isolation trigger
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - ollama
       - redis
- 
+
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
     networks:
-      - model-internal   # deliberately NOT on edge -- unreachable except via control-plane
+      - model-internal
     volumes:
       - ${PROJECT_DATA_PATH:-./data}/ollama:/root/.ollama
     deploy:
@@ -44,17 +50,13 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]   # RTX 5070 Ti -- requires NVIDIA CUDA on WSL2 set up in Docker Desktop
-    # no "ports:" block -- never publish this to the host or LAN
- 
+              capabilities: [gpu]
+
   redis:
     image: redis:7-alpine
     container_name: redis
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set -- no default}
     networks:
-      - state-internal   # deliberately NOT on edge or model-internal
+      - state-internal
     volumes:
       - ${PROJECT_DATA_PATH:-./data}/redis:/data
-    # no "ports:" block -- Redis is never exposed to the host or LAN
-
-
