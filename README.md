@@ -318,23 +318,46 @@ infrastructure node described above.
 `control_plane/main.py` (FastAPI + LLM Guard library + Redis RBAC + Docker
 network isolation, from the working build above) is the canonical
 implementation. `security_control.py` and `mission_start.py` were an
-earlier exploratory pipeline design and now live in `archive/` rather than
-`control_plane/` or `src/` -- kept for reference, not active development.
-The real layout:
+earlier exploratory pipeline design; `security_control.py` was archived, and
+`mission_start.py` turned out to still be real, working code -- see below.
+The actual current layout:
 
 ```text
-control-plane/
+adversarial-ai-control-plane/
+  main.py                          -- canonical FastAPI app, imports control_plane/
   docker-compose.yml
+  Dockerfile
+  requirements.txt
+  README.md
+  .gitignore
+  .env                             -- gitignored, never committed, real secrets live here
   control_plane/
-    main.py
-    requirements.txt
-    Dockerfile
+    continuous_control_plane.py    -- real identity/MFA/role policy logic, imported by main.py
+  docs/
+    build-notes.md                 -- operational reference (RBAC, calibration, roadmap)
+    notes.md
+    threat-model.md
   infra/
-    main.tf
-  archive/
-    proxy-variant/       -- earlier standalone proxy + separate llm-guard-api service
-    pipeline-concept/     -- security_control.py / mission_start.py, Tier1/2 + Risk Fusion design
+    Dockerfile                     -- unused leftover from the original template, safe to remove
+  scripts/
+    open-ai-project.sh
+  src/
+    control_plane/
+      continuous_control_plane.py  -- duplicate of the root version, used only by mission_start.py locally
+    mission_start.py               -- test harness, imports the src/ copy above
+    mission_start_v1.py
+    output.txt
+  data/                            -- gitignored, Ollama weights + Redis persistence, never committed
 ```
+
+**Known duplication worth resolving eventually, not urgently:**
+`continuous_control_plane.py` exists in two places -- root `control_plane/`
+(what the Docker image actually uses) and `src/control_plane/` (what
+`mission_start.py` imports for local testing). They should be kept
+identical by hand for now; the real fix is pointing `mission_start.py` at
+the root copy instead of maintaining two, but that's cleanup, not a bug --
+nothing breaks today, it's just an easy thing to let drift silently if one
+copy gets edited and the other doesn't.
 
 **Ideas from the archived pipeline concept worth porting into the canonical
 build, queued on the roadmap above:**
@@ -345,15 +368,16 @@ build, queued on the roadmap above:**
 - Canary token detection -- plant a known secret in context, alert if it
   ever appears in a response. Simple to add, high signal.
 
-**Known bugs in the archived code, noted so they don't get pulled back in
-blind:** the pipeline-concept variant hardcoded every user's trust score to
-0.95 regardless of identity (defeats the purpose of RBAC), dropped the
-`canary_token` constructor argument so canary detection may be
-non-functional even where it's called, and widened its trusted-registry
-entry from a specific API path to an entire domain. The proxy-variant
-replaced its LLM Guard classifier call with a bypassable substring
-blocklist. None of this is wrong to have explored -- just don't treat
-either archived file as production-ready if it gets revisited later.
+**Known bugs, noted so they don't get pulled back in blind:** the archived
+`security_control.py` hardcoded every user's trust score to 0.95 regardless
+of identity (defeats the purpose of RBAC) and its `evaluate_input` always
+returned the same hardcoded PASS result no matter the input -- confirmed
+dead code, safely archived. A separate early standalone proxy file (the one
+with the OpenAI-style `/v1/chat/completions` endpoint and a hardcoded
+injection-signature blocklist) was never wired into anything and was
+superseded by the working `main.py` above -- it wasn't formally archived,
+just left unused; safe to delete if you come across it, since nothing
+imports it and nothing routes to it.
 
 ## Security Philosophy
 
