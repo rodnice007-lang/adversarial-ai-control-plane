@@ -1,6 +1,6 @@
 import os
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 app = FastAPI(title="Adversarial AI Control Plane Proxy")
