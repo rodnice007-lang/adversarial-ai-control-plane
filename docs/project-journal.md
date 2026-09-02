@@ -229,3 +229,19 @@ Documentation: matches what's actually running, corrected multiple times
 when it drifted. Hardware: fully planned and staged, execution waiting on
 physical parts and a completed safety net -- not rushed ahead of either.
 
+---
+
+## Changelog
+
+Appended automatically going forward, whenever a real change is made or a
+real issue is found -- short, dated, specific. This is the running log;
+the sections above are the standing summary, updated less often.
+
+### 2026-09-02
+- Created this journal and its changelog section. Standing process
+  established: from here forward, changes and issues get a dated entry
+  here automatically, ready to paste into VS Code and push -- no need to
+  ask each time.
+
+
+
