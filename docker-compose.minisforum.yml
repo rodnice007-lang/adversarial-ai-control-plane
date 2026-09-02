@@ -1,0 +1,82 @@
+# Target: Minisforum X1 Pro-470, Ubuntu Server 24.04 LTS, RX 9070 XT (RDNA 4,
+# gfx1201) via native OCuLink to the DEG1 eGPU dock.
+#
+# This is the corrected reference for the Linux/ROCm setup -- built from the
+# same verified isolation model as the Windows/CUDA compose file (three
+# separate networks, no published Redis/Ollama ports, real RBAC in
+# main.py), NOT from the flawed "AASCP" draft. Specific corrections versus
+# that draft, so the reasoning isn't lost:
+#
+#   - No HSA_OVERRIDE_GFX_VERSION. That override forces the driver to treat
+#     the card as gfx1100 (RDNA 3) -- wrong architecture entirely. gfx1201
+#     has native ROCm 7.2 support; forcing an override actively misidentifies
+#     the hardware rather than doing nothing.
+#   - Three isolated networks (edge / model-internal / state-internal),
+#     matching what's actually running and tested today -- not one flat
+#     bridge with Redis published even to localhost.
+#   - One default model (DEFAULT_MODEL, same pattern as the Windows config),
+#     not two simultaneous "always warm" 14B models competing for 16GB VRAM.
+#   - No VLAN, no .254 addressing -- matches the real, verified network
+#     (Minisforum at 192.168.1.20, confirmed against actual hardware specs).
+
+networks:
+  edge:
+    driver: bridge
+  model-internal:
+    driver: bridge
+    internal: true
+  state-internal:
+    driver: bridge
+    internal: true
+
+services:
+  control-plane:
+    build: .
+    container_name: control-plane
+    networks:
+      - edge
+      - model-internal
+      - state-internal
+    ports:
+      - "8443:8443"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set -- no default}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:?ADMIN_API_KEY must be set -- no default}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-qwen2.5:3b}
+    volumes:
+      - ${PROJECT_DATA_PATH:-./data}/logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro # needed for the isolation trigger
+    depends_on:
+      - ollama
+      - redis
+
+  ollama:
+    image: ollama/ollama:rocm # the ROCm-specific tag -- :latest may not include ROCm runtime libs
+    container_name: ollama
+    networks:
+      - model-internal # deliberately NOT on edge -- unreachable except via control-plane
+    volumes:
+      - ${PROJECT_DATA_PATH:-./data}/ollama:/root/.ollama
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+    # If the container can't see the GPU, check `id` on the host user for
+    # video/render group membership before assuming the config is wrong --
+    # that's the actual most common failure point, not the compose file.
+    # no "ports:" block -- never publish this to the host or LAN
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set -- no default}
+    networks:
+      - state-internal # deliberately NOT on edge or model-internal
+    volumes:
+      - ${PROJECT_DATA_PATH:-./data}/redis:/data
+    # no "ports:" block -- Redis is never exposed to the host or LAN
+
