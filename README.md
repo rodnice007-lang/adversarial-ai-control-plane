@@ -32,8 +32,7 @@ This project is developed and tested in a dual-node homelab environment designed
 
 **MINISFORUM AI X1 Pro-470**
 
-- Windows 11
-- WSL2 Ubuntu
+- Ubuntu 26.04.1 LTS "Resolute Raccoon" (native, no Windows/WSL2)
 - Docker
 - Control Plane Services
 - Automation Workloads
@@ -56,6 +55,37 @@ This project is developed and tested in a dual-node homelab environment designed
 - AZ-104 learning environment
 - Identity and governance experiments
 - Hybrid cloud testing
+
+## Deployment Status
+
+As of September 7, 2026, the full stack has been deployed and verified
+end-to-end on the Infrastructure Node (`homelab1`, Ubuntu 26.04.1 LTS),
+replacing the Windows/WSL2/NVIDIA development environment for
+production purposes.
+
+**Confirmed working:**
+
+- **GPU acceleration** — AMD Radeon RX 9070 XT via ROCm 7.2, native
+  `gfx1201` support. Ollama's own startup log confirms real GPU
+  detection (`library=ROCm compute=gfx1201 ... total="15.9 GiB"`), not
+  CPU fallback.
+- **Model inference** — `qwen2.5:14b` running on GPU, ~280ms eval time
+  once warm.
+- **RBAC** — Redis-backed API key auth confirmed rejecting
+  unauthenticated requests and accepting valid ones.
+- **Prompt injection defense (LLM Guard)** — confirmed blocking a real
+  injection attempt (`PromptInjection` score of 1.0) before it reached
+  the model, with a clean benign-request/attack-request pair as
+  evidence.
+- **Network isolation** — `ollama` and `redis` run on internal-only
+  Docker networks with no published ports; model pulls require
+  temporarily bridging to an external network and disconnecting
+  immediately after.
+
+**Open items:** see `docs/project-journal.md` for the full session
+notes, including a few remaining cleanup tasks (`.env` review, stale
+compose file comments, circuit-breaker re-verification, and a pending
+Nmap port-isolation check).
 
 ## Security Architecture
 
@@ -382,3 +412,4 @@ imports it and nothing routes to it.
 ## Security Philosophy
 
 Security decisions happen outside the AI, not inside it.
+

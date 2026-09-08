@@ -244,4 +244,34 @@ the sections above are the standing summary, updated less often.
   ask each time.
 
 
+### 2026-09-07
+
+- First full deployment on `homelab1` (Minisforum AI X1 Pro-470,
+  Ubuntu 26.04.1 LTS), replacing the Windows/WSL2/NVIDIA dev
+  environment for production. GPU block swapped from NVIDIA driver
+  reservation to ROCm device passthrough (`/dev/kfd`, `/dev/dri`) via
+  `docker-compose.override.yml`, using host GIDs directly since the
+  `render` group doesn't resolve by name inside the `ollama/ollama:rocm`
+  image. Confirmed RX 9070 XT detected natively (`gfx1201`, no
+  compatibility override needed) via `rocminfo`/`rocm-smi`.
+- Pulled and ran `qwen2.5:14b` on GPU — confirmed real inference
+  (~280ms eval time once warm), not CPU fallback.
+- Confirmed `model-internal` network's outbound isolation is real:
+  `ollama` pull failed until temporarily bridged to `edge`, then
+  restored isolation after. Working as designed, not a bug.
+- Verified the core security claim end-to-end: LLM Guard blocked a real
+  prompt injection attempt (`PromptInjection` score 1.0) before it
+  reached the model, with a clean benign-request/attack-request pair
+  as evidence.
+- Generated fresh `.env` secrets for this host rather than carrying
+  over the old Windows-box values.
+- Confirmed host OS via `lsb_release -a`: Ubuntu 26.04.1 LTS
+  "Resolute Raccoon."
+- Open items: stale `docker-compose.yml` header comment still
+  references the old Windows/WSL2 dev machine; decide on
+  `docker-compose.minisforum.yml`'s fate; re-verify the circuit
+  breaker on this host; test additional injection patterns; run the
+  outstanding Nmap port-isolation check against `homelab1`'s real LAN
+  IP.
+
 
