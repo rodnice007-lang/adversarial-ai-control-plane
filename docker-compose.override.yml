@@ -1,0 +1,11 @@
+services:
+  ollama:
+    image: ollama/ollama:rocm
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - "44"
+      - "991"
+    environment:
+      - HIP_VISIBLE_DEVICES=0
