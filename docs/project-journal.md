@@ -229,6 +229,19 @@ Documentation: matches what's actually running, corrected multiple times
 when it drifted. Hardware: fully planned and staged, execution waiting on
 physical parts and a completed safety net -- not rushed ahead of either.
 
+**Note on the resume/status document:** a separate `.docx`
+(`Adversarial_AI_Control_Plane_Resume_and_Status.docx`) exists for
+external presentation (portfolio, interviews) and was built in a
+different chat. As of 2026-09-02 it agrees with this journal on the two
+things that matter most -- Azure is scoped as a separate AZ-104/SC-500
+cert lab, not part of the control plane's data path, and the Minisforum
+Linux migration is correctly kept as "planned, not verified" until it's
+actually done and re-tested on the new OS. **This journal is the source
+of truth for the repo.** Treat the resume doc as something periodically
+regenerated *from* this journal's current state, not maintained
+independently -- that's what actually prevents the two from drifting
+apart, not just remembering to update both by hand.
+
 ---
 
 ## Changelog
@@ -242,36 +255,99 @@ the sections above are the standing summary, updated less often.
   established: from here forward, changes and issues get a dated entry
   here automatically, ready to paste into VS Code and push -- no need to
   ask each time.
+- Added a cross-reference note pointing at the separate resume/status
+  `.docx` (built in a different chat), establishing this journal as the
+  repo's source of truth -- the resume doc should be periodically
+  regenerated from this journal's state, not maintained independently.
+- Reviewed a third-party "threat -> mitigation" claim list against the
+  actual system. Two items pursued, two tabled:
+  - **Pursuing -- ASCII smuggling / hidden Unicode stripping.** Real gap,
+    not currently covered by anything in the scanner stack. Distinct from
+    prompt injection: this is about stripping invisible Unicode tag
+    characters or zero-width characters that carry instructions a human
+    reviewer can't see but the model still processes. Needs a dedicated
+    pre-processing step before the existing LLM Guard scanners run.
+  - **Pursuing -- Egress/output scanning.** Reaffirming an existing,
+    already-tracked gap (also listed in the README roadmap): the
+    `Anonymize` (PII/DLP) scanner only runs on input today. Responses
+    aren't checked for leaked secrets or sensitive data before they go
+    out. Real, specific, worth prioritizing before claiming "output
+    monitoring" anywhere external-facing.
+  - **Tabled -- "Agent Autonomy / Lethal Trifecta" kill-switch framing.**
+    Doesn't apply to this architecture. That threat model describes
+    agentic systems with tool-calling and autonomous execution privileges;
+    this control plane has neither -- it's a prompt-in/response-out
+    gateway. Confirmed as a mismatch, not something to build toward.
+  - **Tabled -- the "blocks anomalous behavior at machine speed" framing**
+    as stated. The isolation trigger genuinely is fast and automated, but
+    it's input-side pattern/classifier scanning, not output-side
+    behavioral anomaly detection. Accurate capability, slightly
+    overstated framing -- not pursuing behavioral detection specifically
+    right now, just noting the gap between the claim and what's real.
 
+### 2026-09-03
+- Located and retrieved `Adversarial_AI_Control_Plane_Resume_and_Status.docx`
+  from the separate resume-planning chat, since it wasn't downloaded
+  locally. Confirmed via `read_conversation` search rather than assumed.
+- Ran a real ATS structural check on the file (XML-level, not just visual
+  read): zero tables, zero columns, zero images/text boxes, zero
+  headers/footers, real `Heading1` styles used -- structurally clean on
+  the parts that usually break ATS parsers.
+- Found two real issues: the document's italicized "Note:" paragraphs are
+  NOT true Word comments (confirmed zero `commentReference` elements
+  despite an unused `comments.xml` existing in the archive) -- they're
+  visible body text that would show up if submitted as-is. And the
+  document mixes audience-facing resume content with a verbal pitch,
+  build-status notes, and a raw code appendix -- none of which belong in
+  a submitted resume.
+- Produced two outputs: `ATS_Check_Report.md` (the full findings) and
+  `AASCP_Resume_Entry_ATS_Clean.docx` (just the resume-ready bullets,
+  extracted, special Unicode characters simplified to plain ASCII,
+  real Word bullet formatting instead of the original's mostly-unformatted
+  list paragraphs).
+- Built `docs/resume-update-roadmap.md` -- maps each known technical gap
+  (RBAC user-role test, egress/output scanning, ASCII smuggling defense,
+  WSL2 re-verification, the `continuous_control_plane.py` duplication,
+  and the Minisforum Linux migration) to the exact resume claim it
+  unlocks once actually verified. Split into "doable now, no hardware
+  needed" versus "waiting on the long weekend."
 
-### 2026-09-07
+### 2026-09-08
+- Confirmed decision: keep the existing UniFi Flex 2.5G-5 as the main
+  switch (no changes needed, already doing its job), add a UniFi
+  Flex-XG in December to run alongside it -- not a replacement. The
+  Flex-XG covers 802.1X and LACP, which the Flex 2.5G-5 doesn't support
+  and was purchased before that gap was identified.
+- **Correction:** an earlier entry claimed `REDIS_PASSWORD` and
+  `ADMIN_API_KEY` were rotated after both values were pasted into this
+  chat's history during debugging (terminal output, curl commands). That
+  was wrong -- when actually verified (`docker exec control-plane env`,
+  then `type .env`), both values were still the exact ones exposed in
+  chat. The rotation never happened; the earlier "done" status was an
+  unverified assumption. Real fix in progress: generating genuinely new
+  values, replacing `.env`'s content completely (also cleaning up
+  leading-whitespace formatting found in the file), restarting the stack,
+  and re-verifying with `docker exec control-plane env | findstr API_KEY`
+  before considering this closed. Not a GitHub leak either way -- the
+  repo itself was never affected -- but this correction stands until the
+  real rotation is verified.
+- **Resolved, genuinely verified this time.** `REDIS_PASSWORD` rotated
+  cleanly on the first attempt. `ADMIN_API_KEY` took several rounds to
+  actually fix -- a real troubleshooting chain, not a quick fix: a
+  zero-width-space Unicode character got introduced via copy-paste into
+  `.env`, corrupting it (fixed by writing the file via PowerShell with
+  explicit ASCII encoding instead of manual paste); a leftover
+  `$env:ADMIN_API_KEY` shell variable from earlier testing was
+  overriding `.env` in that terminal session (fixed by opening a fresh
+  terminal); `docker compose down` alone wasn't force-recreating the
+  containers (fixed with explicit `docker rm -f` + `--force-recreate`);
+  and the actual root cause underneath all of that -- the old exposed
+  value had simply been retyped back into the `ADMIN_API_KEY` line in
+  `.env` at some point, isolated from the Redis line, which is why Redis
+  rotated fine while admin didn't. Confirmed final state via
+  `docker exec control-plane env | findstr API_KEY` showing the new
+  value, not the one exposed in chat. Both secrets now genuinely rotated
+  and verified on the actual running container.
 
-- First full deployment on `homelab1` (Minisforum AI X1 Pro-470,
-  Ubuntu 26.04.1 LTS), replacing the Windows/WSL2/NVIDIA dev
-  environment for production. GPU block swapped from NVIDIA driver
-  reservation to ROCm device passthrough (`/dev/kfd`, `/dev/dri`) via
-  `docker-compose.override.yml`, using host GIDs directly since the
-  `render` group doesn't resolve by name inside the `ollama/ollama:rocm`
-  image. Confirmed RX 9070 XT detected natively (`gfx1201`, no
-  compatibility override needed) via `rocminfo`/`rocm-smi`.
-- Pulled and ran `qwen2.5:14b` on GPU — confirmed real inference
-  (~280ms eval time once warm), not CPU fallback.
-- Confirmed `model-internal` network's outbound isolation is real:
-  `ollama` pull failed until temporarily bridged to `edge`, then
-  restored isolation after. Working as designed, not a bug.
-- Verified the core security claim end-to-end: LLM Guard blocked a real
-  prompt injection attempt (`PromptInjection` score 1.0) before it
-  reached the model, with a clean benign-request/attack-request pair
-  as evidence.
-- Generated fresh `.env` secrets for this host rather than carrying
-  over the old Windows-box values.
-- Confirmed host OS via `lsb_release -a`: Ubuntu 26.04.1 LTS
-  "Resolute Raccoon."
-- Open items: stale `docker-compose.yml` header comment still
-  references the old Windows/WSL2 dev machine; decide on
-  `docker-compose.minisforum.yml`'s fate; re-verify the circuit
-  breaker on this host; test additional injection patterns; run the
-  outstanding Nmap port-isolation check against `homelab1`'s real LAN
-  IP.
 
 
