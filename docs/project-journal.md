@@ -331,7 +331,7 @@ the sections above are the standing summary, updated less often.
   before considering this closed. Not a GitHub leak either way -- the
   repo itself was never affected -- but this correction stands until the
   real rotation is verified.
-- **Resolved, genuinely verified this time.** `REDIS_PASSWORD` rotated
+-- **Resolved, genuinely verified this time.** `REDIS_PASSWORD` rotated
   cleanly on the first attempt. `ADMIN_API_KEY` took several rounds to
   actually fix -- a real troubleshooting chain, not a quick fix: a
   zero-width-space Unicode character got introduced via copy-paste into
@@ -348,6 +348,4 @@ the sections above are the standing summary, updated less often.
   `docker exec control-plane env | findstr API_KEY` showing the new
   value, not the one exposed in chat. Both secrets now genuinely rotated
   and verified on the actual running container.
-
-
 
