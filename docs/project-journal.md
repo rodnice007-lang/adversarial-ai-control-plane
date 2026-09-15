@@ -236,11 +236,43 @@ different chat. As of 2026-09-02 it agrees with this journal on the two
 things that matter most -- Azure is scoped as a separate AZ-104/SC-500
 cert lab, not part of the control plane's data path, and the Minisforum
 Linux migration is correctly kept as "planned, not verified" until it's
-actually done and re-tested on the new OS. **This journal is the source
-of truth for the repo.** Treat the resume doc as something periodically
-regenerated *from* this journal's current state, not maintained
-independently -- that's what actually prevents the two from drifting
-apart, not just remembering to update both by hand.
+actually done and re-tested on the new OS. Treat the resume doc as
+something periodically regenerated *from* this journal's current state,
+not maintained independently -- that's what actually prevents the two
+from drifting apart, not just remembering to update both by hand.
+
+**Note on the network/topology plan, added 2026-09-15:** a separate
+`homelab-build-plan.docx`, built turn by turn in a different chat, also
+documents the network topology and switch hardware -- and as of
+2026-09-14 it still showed a UniFi-based plan that directly contradicted
+the TP-Link Omada decision confirmed here. That conflict is resolved in
+this journal's 2026-09-15 entries; `homelab-build-plan.docx` has not
+been updated to match and should be treated as superseded, not a second
+source of truth. A few genuinely reusable technical lessons from that
+document are worth keeping even though its specific switch plan is
+outdated:
+- **VLAN isolation is enforced by the firewall, not the switch.** A
+  switch tags and trunks frames; if two VLANs can reach each other,
+  that's an OPNsense rule problem, not something switch configuration
+  alone fixes. Worth remembering regardless of which switch brand is
+  active.
+- **PoE budget is not a flat number** -- how much power a PoE-capable
+  switch can actually output depends on how the switch itself is fed
+  (its own PoE input tier or its AC adapter), not just its rated
+  maximum. Relevant if PoE access points ever enter the picture later.
+- **Phased migration validated one device at a time, in order** -- MSI
+  Vector first, confirm it reaches the internet and pulls the right
+  subnet, only then move the Minisforum, and explicitly test that
+  cross-segment deny rules actually deny rather than assuming they do.
+  Worth reusing as the actual migration procedure regardless of switch
+  hardware.
+
+**This journal is the single ongoing source of truth for the whole
+project** -- network plan, software state, and resume/status content
+alike. Any other document (the resume `.docx`, `homelab-build-plan.docx`,
+or anything built in a future separate chat) should be treated as a
+derived snapshot, regenerated from this journal's current state when
+needed, never maintained as an independent parallel record.
 
 ---
 
@@ -462,7 +494,7 @@ the sections above are the standing summary, updated less often.
   which would otherwise silently break this double-NAT setup entirely,
   since the "WAN" side here genuinely is a private 192.168.1.x range.
 
-### 2026-09-09
+### 2026-09-14
 - Discovered a real, active `docker-compose.override.yml` in the repo root
   that neither of us had discussed -- Docker Compose auto-loads and merges
   this file into every `docker compose up`, no flag needed. Its contents
@@ -504,4 +536,85 @@ the sections above are the standing summary, updated less often.
   purely cosmetic step (silencing local Pylance import warnings) that
   should not be repeated.
 
+### 2026-09-15
+- Reviewed an updated physical wiring/topology diagram against the plan
+  documented in this journal -- found real drift, but confirmed all of
+  it was intentional updates, not diagram error, except one factual
+  claim that needed correcting.
+- **Confirmed changes to the plan** (superseding earlier entries):
+  - Switch: **TP-Link Omada SG2210XMP-M2** (8x 2.5G PoE + 2x 10G SFP+) is
+    the actual switch for the lab segment -- not the UniFi Flex 2.5G-5 /
+    Flex-XG combination logged on 2026-09-04/09-08. Confirmed directly by
+    the user as the correct current choice.
+  - OS target: **Ubuntu 26.04.1 LTS** on the Minisforum X1 Pro-470 -- not
+    24.04 LTS as documented since the migration runbook was written.
+    Real consequence: the Ubuntu installer USB already built via Rufus
+    (confirmed as `Ubuntu 24.04.4 LTS amd64` in an earlier screenshot) is
+    now the wrong version and needs rebuilding with 26.04.1 before the
+    actual migration happens.
+  - Storage layout: **split, not mirrored** -- Slot 0 (Kingston 2TB) runs
+    the OS, Slot 1 (Samsung 990 Pro 2TB) holds AI models/Docker/projects/
+    Git/Wazuh data. This replaces the ZFS-mirror-for-redundancy plan
+    logged earlier; there is currently no drive-failure redundancy under
+    this layout, worth being aware of even though it's the confirmed
+    choice.
+  - eGPU chain added to the topology visually: Minisforum -> eGPU Dock
+    (DEG1) -> RTX 9070 XT (OCuLink) -- previously only mentioned in build
+    notes, not shown as part of the actual diagram.
+  - Work Desktop corrected to connect directly to the Spectrum router,
+    on the household side -- not through the TP-Link switch into the
+    isolated lab segment as an earlier draft of the diagram showed. This
+    matches the original reasoning for keeping the wife's VPN-connected
+    device off the lab network entirely.
+- **One factual claim corrected, not just updated:** Protectli's WAN
+  connection was labeled "DHCP Reservation" in the draft diagram. This
+  contradicts the 2026-09-04 finding that Spectrum's PC20
+  (SBE1V1K/SBE1V1R) does not expose reservation controls to customers --
+  confirmed again today as still accurate. Corrected to "Static IP"
+  (192.168.1.100), matching the actual decided fallback.
+- Known hardware issue surfaced in the diagram's build notes, not yet
+  resolved: Samsung 990 Pro not detected in Slot 0 on the Minisforum,
+  currently working from Slot 1 instead. Troubleshooting steps noted for
+  later: check Samsung firmware, update Minisforum BIOS, test
+  `nvme_core.default_ps_max_latency_us=0`.
+- Produced a corrected topology diagram reflecting all of the above.
+- **Unresolved conflict discovered, flagged rather than silently
+  resolved.** A separate chat from 2026-09-14 ("Choosing between regular
+  and PoE+ network switch") shows the switch plan as still fully
+  UniFi-based at that time -- keep the existing Flex Mini 2.5G, add the
+  Flex-XG, with a specific port-by-port map already worked out (Port 2 ->
+  Protectli LAN, Port 3 -> X1 Pro-470, Port 4 -> AP via PoE injector,
+  Port 5 -> downlink to the Flex Mini). This directly contradicts the
+  TP-Link Omada SG2210XMP-M2 confirmed as correct earlier today, in this
+  same session -- the two chats never reconciled with each other.
+  **Not resolved as of this entry -- needs a real decision, not a guess:**
+  which switch is actually current, TP-Link Omada or the UniFi Flex Mini
+  + Flex-XG pairing.
+- Related finding from that same 09-14 chat, relevant only if UniFi ends
+  up being the real answer: a **UniFi Network Controller** would need to
+  run somewhere (self-hosted on the X1 Pro, or a separate Cloud Key) just
+  to configure VLANs on either UniFi switch -- a real infrastructure
+  component never discussed anywhere in this journal before now.
+- Also surfaced: that 09-14 chat references an actively-maintained
+  `homelab-build-plan.docx` with its own topology and cable-map SVGs,
+  built and revised turn by turn in that separate conversation --
+  meaning there is a second, parallel network-documentation effort this
+  journal has never been reconciled against. Same "multiple sources of
+  truth" pattern this project already hit once with the resume documents
+  and three times with divergent `main.py` implementations, now
+  recurring with the network plan specifically. Worth consolidating to
+  one authoritative document before building anything further on top of
+  either version.
+- **Resolved:** the switch conflict flagged above is settled. TP-Link
+  Omada SG2210XMP-M2 is the real, active switch (on order/incoming) --
+  confirmed as final, not just the diagram's assumption. UniFi (the
+  existing Flex Mini 2.5G, and the previously-planned Flex-XG) is
+  shelved -- kept as backup hardware / testing gear, not part of the
+  active topology. This makes the UniFi Network Controller requirement
+  moot for the current plan; only relevant again if UniFi gear actually
+  gets pressed back into service later. The `homelab-build-plan.docx`
+  in the separate 09-14 chat still shows the old UniFi-based plan as of
+  this entry -- this journal is the resolved source of truth on this
+  specific point until that other document gets updated to match, if it
+  ever does.
 
