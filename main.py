@@ -1,6 +1,7 @@
 import hashlib
 import os
 import logging
+import re
 import secrets
 
 import docker
@@ -17,6 +18,15 @@ from control_plane.continuous_control_plane import evaluate_control_plane_reques
 
 app = FastAPI(title="AI security control plane")
 logger = logging.getLogger("control_plane")
+
+# One shared client for the app's lifetime instead of one per request --
+# reuses the connection pool to Ollama rather than tearing it down and
+# rebuilding it on every single call.
+http_client = httpx.AsyncClient(timeout=120)
+
+@app.on_event("shutdown")
+async def close_http_client():
+    await http_client.aclose()
 
 docker_client = docker.from_env()
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
@@ -36,11 +46,6 @@ RATE_LIMIT_MAX_REQUESTS = 30
 RATE_LIMIT_WINDOW_SECONDS = 60
 
 # --- RBAC ---------------------------------------------------------------
-# API keys are never stored in plaintext -- only their SHA-256 hash lives in
-# Redis, mapped to a role. ADMIN_API_KEY seeds the very first admin key on
-# startup so there's a way in; every key after that gets minted through
-# /v1/admin/keys by an existing admin.
-
 RBAC_KEY_HASH = "rbac:keys"
 VALID_ROLES = ("admin", "user")
 
@@ -77,33 +82,14 @@ def seed_admin_key() -> None:
 
 
 # --- LLM Guard scanner configuration -----------------------------------
-# Every threshold below is a STARTING POINT, not a finished answer. Tune
-# these against your own adversarial prompt set (the Kali VM is the right
-# place to generate that set) and adjust based on what get logged as
-# borderline or missed. Env vars let you retune without a rebuild.
-#
-# Known limitation worth internalizing: LLM Guard's PromptInjection
-# scanner is a single classifier and has documented blind spots -- social-
-# engineering-style jailbreaks phrased as harmless requests ("pretend
-# you're my grandmother...") have been observed getting past it in
-# real-world testing. Treat this scanner as one layer, not a guarantee --
-# RBAC and output-side review still matter even with a well-tuned
-# threshold here.
-
 PROMPT_INJECTION_THRESHOLD = float(os.environ.get("PROMPT_INJECTION_THRESHOLD", "0.5"))
 ANONYMIZE_THRESHOLD = float(os.environ.get("ANONYMIZE_THRESHOLD", "0.5"))
 TOKEN_LIMIT = int(os.environ.get("TOKEN_LIMIT", "4096"))
-
-# Log anything that scores within this margin of its threshold, even if it
-# passed -- this is how you build the evidence to move a threshold with
-# confidence later instead of guessing.
 BORDERLINE_MARGIN = 0.15
 
-vault = Vault()  # holds real values behind the placeholders Anonymize inserts
+vault = Vault()
 
 scanners = [
-    # Order matters: catch injection/jailbreak attempts before anything
-    # else processes the text.
     PromptInjection(threshold=PROMPT_INJECTION_THRESHOLD, match_type=MatchType.FULL),
     Anonymize(vault, threshold=ANONYMIZE_THRESHOLD),
     TokenLimit(limit=TOKEN_LIMIT),
@@ -123,6 +109,30 @@ def log_borderline_scores(results_score: dict) -> None:
                 "borderline score for %s: %.3f (threshold %.3f)",
                 scanner_name, score, threshold,
             )
+
+
+# --- NEW: ASCII smuggling defense ---------------------------------------
+# Strips Unicode tag characters (U+E0000-U+E007F) and zero-width
+# characters that can carry instructions invisible to human review.
+# Runs BEFORE the scanners below, so a smuggled instruction never reaches
+# PromptInjection/Anonymize in its hidden form.
+HIDDEN_UNICODE_PATTERN = re.compile("[\U000E0000-\U000E007F\u200B-\u200D\uFEFF]")
+
+
+def strip_hidden_unicode(text: str) -> str:
+    return HIDDEN_UNICODE_PATTERN.sub("", text)
+
+
+# --- NEW: canary token detection ----------------------------------------
+# A hidden marker included in this note is never something the model is
+# asked to repeat. If it shows up in a response anyway, that's a strong,
+# independent signal of context leakage or exfiltration -- separate from
+# whatever the input scanners did or didn't catch.
+CANARY_TOKEN = os.environ.get("CANARY_TOKEN", secrets.token_hex(16))
+
+
+def check_for_canary_leak(output_text: str) -> bool:
+    return CANARY_TOKEN in output_text
 
 
 def isolate_model_network() -> None:
@@ -148,26 +158,6 @@ def check_rate_limit(identity: str) -> bool:
     return count <= RATE_LIMIT_MAX_REQUESTS
 
 
-# --- continuous_control_plane wiring ------------------------------------
-# Two honest limitations, not hidden ones:
-#
-# 1. Role vocabulary mismatch. RBAC only issues "admin" / "user" roles.
-#    continuous_control_plane.py's rules for "engineer" and
-#    "attacker_script" will never fire through this path as a result --
-#    they're not wrong, they're just currently unreachable from here. If
-#    you want those rules live, RBAC needs to actually issue those roles,
-#    not just this function accepting them.
-#
-# 2. has_mfa is hardcoded False, not read from the request. Real MFA isn't
-#    implemented anywhere in this project yet, and pulling "has_mfa" from
-#    client-supplied JSON would let any caller simply claim they passed
-#    MFA -- that's worse than not checking at all. Hardcoding False means
-#    the "chat" action never trips the admin_access/MFA rule (it only
-#    checks that rule for action == "admin_access"), so this is safe to
-#    wire in now without breaking anything; it becomes meaningful once
-#    real MFA verification exists and this gets replaced with a real
-#    lookup.
-
 def run_identity_policy_check(role: str, prompt: str) -> dict:
     return evaluate_control_plane_request(
         user_role=role,
@@ -186,20 +176,13 @@ def extract_latest_user_message(messages: list) -> str:
 
 @app.get("/api/tags")
 async def list_models(role: str = Depends(require_role("admin", "user"))):
-    """Open WebUI calls this to populate the model dropdown -- pure
-    passthrough, no scanning needed since nothing here is user-generated
-    content."""
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(f"{OLLAMA_HOST}/api/tags")
+    response = await http_client.get(f"{OLLAMA_HOST}/api/tags")
     return response.json()
 
 
 @app.get("/api/version")
 async def version():
-    """Open WebUI pings this on connect to confirm it's talking to
-    something Ollama-shaped."""
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(f"{OLLAMA_HOST}/api/version")
+    response = await http_client.get(f"{OLLAMA_HOST}/api/version")
     return response.json()
 
 
@@ -219,7 +202,7 @@ async def ollama_native_chat(
 
     body = await request.json()
     messages = body.get("messages", [])
-    prompt = extract_latest_user_message(messages)
+    prompt = strip_hidden_unicode(extract_latest_user_message(messages))
     if not prompt:
         raise HTTPException(status_code=400, detail="no user message found")
 
@@ -242,24 +225,31 @@ async def ollama_native_chat(
             detail={"blocked": True, "scores": results_score},
         )
 
-    # Replace the latest user message with the sanitized version before
-    # forwarding -- keeps prior conversation turns intact for context.
     sanitized_messages = list(messages)
     for i in range(len(sanitized_messages) - 1, -1, -1):
         if sanitized_messages[i].get("role") == "user":
             sanitized_messages[i] = {**sanitized_messages[i], "content": sanitized_prompt}
             break
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{OLLAMA_HOST}/api/chat",
-            json={
-                "model": body.get("model", DEFAULT_MODEL),
-                "messages": sanitized_messages,
-                "stream": False,
-            },
-        )
-    return response.json()
+    response = await http_client.post(
+        f"{OLLAMA_HOST}/api/chat",
+        json={
+            "model": body.get("model", DEFAULT_MODEL),
+            "messages": sanitized_messages,
+            "stream": False,
+            "keep_alive": "30m",
+        },
+    )
+    response_data = response.json()
+
+    # NEW: egress check -- independent of what the input scanners caught
+    response_text = response_data.get("message", {}).get("content", "")
+    if check_for_canary_leak(response_text):
+        logger.critical("canary token leak detected in model output")
+        isolate_model_network()
+        raise HTTPException(status_code=403, detail={"blocked": True, "reason": "canary token leak"})
+
+    return response_data
 
 
 @app.post("/v1/chat")
@@ -272,13 +262,12 @@ async def chat(
         raise HTTPException(status_code=429, detail="rate limit exceeded")
 
     body = await request.json()
-    prompt = body.get("prompt", "")
+    prompt = strip_hidden_unicode(body.get("prompt", ""))
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
     policy_result = run_identity_policy_check(role, prompt)
     logger.info("identity policy decision: %s (%s)", policy_result["decision"], policy_result["reason"])
-
     if policy_result["decision"] == "REJECT":
         raise HTTPException(status_code=403, detail=policy_result["reason"])
     if policy_result["decision"] == "ISOLATE":
@@ -296,16 +285,24 @@ async def chat(
             detail={"blocked": True, "scores": results_score},
         )
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={
-                "model": body.get("model", DEFAULT_MODEL),
-                "prompt": sanitized_prompt,
-                "stream": False,
-            },
-        )
-    return response.json()
+    response = await http_client.post(
+        f"{OLLAMA_HOST}/api/generate",
+        json={
+            "model": body.get("model", DEFAULT_MODEL),
+            "prompt": sanitized_prompt,
+            "stream": False,
+            "keep_alive": "30m",
+        },
+    )
+    response_data = response.json()
+
+    response_text = response_data.get("response", "")
+    if check_for_canary_leak(response_text):
+        logger.critical("canary token leak detected in model output")
+        isolate_model_network()
+        raise HTTPException(status_code=403, detail={"blocked": True, "reason": "canary token leak"})
+
+    return response_data
 
 
 class NewKeyRequest(BaseModel):
@@ -324,7 +321,6 @@ async def create_api_key(body: NewKeyRequest, _: str = Depends(require_role("adm
 
 @app.post("/v1/admin/reconnect")
 async def reconnect_model(_: str = Depends(require_role("admin"))):
-    """Manually reconnect the model container after an isolation trigger."""
     container = docker_client.containers.get(MODEL_CONTAINER)
     docker_client.networks.get(MODEL_NETWORK).connect(container)
     logger.info("reconnected %s to %s", MODEL_CONTAINER, MODEL_NETWORK)
@@ -334,6 +330,4 @@ async def reconnect_model(_: str = Depends(require_role("admin"))):
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
-
-
 

@@ -44,6 +44,13 @@ services:
       - model-internal
     volumes:
       - ${PROJECT_DATA_PATH:-./data}/ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
 
   redis:
     image: redis:7-alpine
