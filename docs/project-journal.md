@@ -331,7 +331,7 @@ the sections above are the standing summary, updated less often.
   before considering this closed. Not a GitHub leak either way -- the
   repo itself was never affected -- but this correction stands until the
   real rotation is verified.
--- **Resolved, genuinely verified this time.** `REDIS_PASSWORD` rotated
+- **Resolved, genuinely verified this time.** `REDIS_PASSWORD` rotated
   cleanly on the first attempt. `ADMIN_API_KEY` took several rounds to
   actually fix -- a real troubleshooting chain, not a quick fix: a
   zero-width-space Unicode character got introduced via copy-paste into
@@ -348,4 +348,160 @@ the sections above are the standing summary, updated less often.
   `docker exec control-plane env | findstr API_KEY` showing the new
   value, not the one exposed in chat. Both secrets now genuinely rotated
   and verified on the actual running container.
+- Confirmed Protectli VP2430e purchase details: 4x 2.5G ports, Intel N150,
+  1TB Kingston NVMe NV3-1000G, OPNsense 25.7 "Visionary Viper"
+  pre-installed (no manual OS install needed, unlike the Minisforum's
+  planned Ubuntu install), $629 total. Corrected topology understanding:
+  actual current setup is wall coax -> standalone modem -> Spectrum WiFi7
+  combo unit (model PC20/SBE1V1K) doing routing+WiFi -> wife's work VPN
+  on a numbered LAN port. Spectrum's own equipment-support list
+  (Apple, Arris, ASUS, Belkin, D-Link, eero, Google, Linksys, Netgear,
+  SMC, UBEE, TP-Link, Sagemcom, Ubiquiti) does not include Protectli --
+  likely a support-scope limitation (what reps can walk you through), not
+  a technical incompatibility, since bridge mode is a generic handoff
+  that shouldn't care what's plugged in after it. Decided: given the real
+  risk to an active work VPN, defer full bridge mode -- run OPNsense
+  behind the existing PC20 instead (double-NAT), trading perimeter purity
+  for zero risk to her connection. Full bridge-mode migration to OPNsense
+  as the true edge device stays a real future option, planned for a time
+  she's not depending on the connection.
+- Finalized OPNsense network topology and addressing. Spectrum PC20
+  stays the household router on 192.168.1.0/24 (wife's work devices,
+  family devices, all untouched). Protectli's WAN interface gets
+  192.168.1.100 on that same network (a DHCP reservation is worth
+  setting on the PC20 for this, so the address doesn't shift on router
+  reboot). OPNsense's LAN interface defines a new, isolated subnet,
+  192.168.50.0/24, distinct enough from .1.x to avoid any confusion.
+  UniFi Flex Mini 2.5G sits behind OPNsense on this new subnet, with the
+  MSI Vector and Minisforum connected to it -- planned addresses
+  192.168.50.10 and 192.168.50.20 respectively, keeping the same
+  .10/.20 convention just under the new second octet. This creates a
+  genuine isolated lab segment: firewall rules allow the lab segment
+  outbound internet access but block the household side from initiating
+  any connection into it. Since the laptop (and its VMware Kali VM) move
+  into this segment along with the Minisforum, the existing adversarial
+  testing setup keeps working unchanged -- both machines end up on the
+  same subnet either way.
+- Expanded and finalized the OPNsense addressing plan with reservations
+  and firewall-alias structure. PC20 LAN gateway 192.168.1.1, DHCP pool
+  .100-.254 (Protectli WAN reservation at .100 sits inside this pool,
+  standard practice -- still needs confirming the PC20's admin
+  interface/app actually exposes a DHCP reservation setting, same
+  uncertainty flagged earlier for bridge mode on this equipment).
+  OPNsense LAN gateway 192.168.50.1, DHCP scope .100-.254, with static
+  reservations planned: .10 MSI Vector, .20 Minisforum, and future
+  placeholders (.30 Kali VM, .40 Docker management, .50 future NAS, .60
+  future Wazuh, .70 future Security Onion). Note: Kali VM getting its
+  own .30 address requires setting its VMware network adapter to
+  Bridged mode specifically -- NAT mode (the common default) would
+  tunnel its traffic through the laptop's own IP instead, not give it a
+  distinct address. Corrected one inaccurate claim from the plan: this
+  topology gives no Azure networking experience -- Azure is deliberately
+  a separate, unrelated cloud lab per earlier journal entries, and
+  shouldn't be listed alongside the real cert-alignment benefits here
+  (Network+/Security+/CySA+ segmentation and monitoring concepts, which
+  do genuinely apply). Firewall alias structure confirmed as accurate
+  OPNsense practice: LAB_HOSTS (192.168.50.0/24), MSI_VECTOR (.10),
+  MINISFORUM (.20), used to write readable rules like
+  "ALLOW MSI_VECTOR -> Internet" instead of managing raw IPs everywhere.
+- **Locked, implementation-ready version of the OPNsense plan**,
+  incorporating both corrections cleanly:
+  - Azure bullet removed entirely from the cert-alignment list --
+    confirmed this topology teaches Network+/Security+/CySA+ concepts
+    (routing, NAT, stateful firewalls, segmentation, DHCP, DNS, Docker
+    networking) but nothing Azure-specific; AZ-104 stays its own
+    separate track (VNets, NSGs, route tables, Azure Firewall, private
+    endpoints, RBAC), never blended into this local lab.
+  - Kali's 192.168.50.30 address is explicitly conditional on
+    deliberately configuring VMware Bridged mode -- documented as
+    "only if VMware Bridged mode is intentionally configured," not
+    assumed. NAT mode (the default) would hide Kali behind the MSI's
+    own IP on a separate 172.16.x.x range invisible to OPNsense.
+  - Spectrum DHCP reservation support documented honestly as unverified:
+    preferred approach is a reservation for 192.168.1.100, with a
+    documented fallback (manual static WAN address on OPNsense itself)
+    if the SBE1V1K/SBE1V1R firmware doesn't expose that setting to
+    customers.
+  - Explicit scope discipline reaffirmed for this new area, matching the
+    pattern used throughout the rest of the project: current priority
+    order is Network+, then Security+, CySA+, AZ-104, SC-500, then
+    control-plane evolution. VLANs, Wazuh, Security Onion, Proxmox, and
+    multi-subnet complexity are deliberately not being built now -- the
+    locked topology above is already sufficient to teach DHCP, DNS, NAT,
+    routing, stateful firewalls, port forwarding, Nmap validation,
+    Wireshark analysis, and Docker networking, which covers a large
+    portion of the actual near-term certification objectives.
+  - This version treats three items as "verify during deployment," not
+    blocking assumptions: DHCP reservation support on the Spectrum
+    router, VMware Bridged mode setup for Kali when the attacker VM is
+    actually built, and the final static-vs-reservation choice for
+    OPNsense's WAN address.
+- **Correction:** UniFi Flex-XG purchase timeline pushed back. Earlier
+  entries said "December" -- actual timeline is now at least 7-9 months
+  out (roughly April-June 2027), not December 2026. Nothing else about
+  the decision changes -- Flex-XG still runs alongside the existing
+  Flex 2.5G-5 (not replacing it) once purchased, still closes the
+  802.1X/LACP gap. Just later than previously logged.
+- **Correction:** removed the specific "7-9+ months out" timeline for the
+  UniFi Flex-XG purchase -- caused confusion. Status is now simply
+  "planned, no fixed date." The decision itself is unchanged: Flex-XG
+  still runs alongside the existing Flex 2.5G-5 once purchased, still
+  closes the 802.1X/LACP gap -- just no specific date attached to it
+  going forward, to avoid this same confusion recurring.
+- **Resolved:** confirmed Spectrum does not expose DHCP reservation
+  controls on the PC20 (SBE1V1K/SBE1V1R) -- advanced networking settings
+  are locked behind the My Spectrum Mobile App's managed firmware, no
+  reservation/static-lease option available to the customer. Decision
+  finalized: configure a static IPv4 address (192.168.1.100/24, gateway
+  192.168.1.1) directly on OPNsense's WAN interface instead of relying on
+  a PC20-side reservation. This means OPNsense never requests a DHCP
+  lease at all -- immune to the PC20 rebooting, no lease expiration risk
+  during long test/capture sessions. One critical config detail:
+  "Block private networks" must be UNCHECKED on OPNsense's WAN interface
+  -- it's enabled by default and blocks RFC1918 private ranges on WAN,
+  which would otherwise silently break this double-NAT setup entirely,
+  since the "WAN" side here genuinely is a private 192.168.1.x range.
+
+### 2026-09-09
+- Discovered a real, active `docker-compose.override.yml` in the repo root
+  that neither of us had discussed -- Docker Compose auto-loads and merges
+  this file into every `docker compose up`, no flag needed. Its contents
+  (`ollama/ollama:rocm` image, `/dev/kfd`/`/dev/dri` device paths,
+  `HIP_VISIBLE_DEVICES`) were the future Minisforum/ROCm config, but it
+  was sitting active on the current Windows/NVIDIA laptop deployment --
+  wrong GPU vendor, Linux-only device paths that don't exist on Windows.
+  Fixed by renaming it out of the auto-loaded filename
+  (`docker-compose.override.yml.minisforum-future`) via the terminal,
+  after VS Code's Explorer rename UI rejected the name for unclear
+  reasons -- terminal `Rename-Item` worked cleanly.
+- Separately, and more seriously: the `ollama` service definition was
+  entirely missing from `docker-compose.yml` -- not just its GPU
+  `deploy:` block, the whole service. `control-plane`'s `depends_on:`
+  still referenced `ollama`, a service that no longer existed in the
+  file -- likely why this surfaced as a Problems-panel YAML error.
+  Confirmed via a full-file paste from the user rather than assumed.
+  Fixed with a full-file replace restoring the `ollama` service,
+  including the NVIDIA GPU reservation block that should have been
+  there from the original build.
+- Both fixes verified end-to-end, not just assumed: `docker compose down`
+  / `up --build` produced a clean `Uvicorn running on http://0.0.0.0:8443`
+  with no image/device errors, `curl http://localhost:8443/healthz`
+  returned `{"status":"ok"}`, and `docker exec control-plane env | findstr
+  API_KEY` confirmed the correct rotated admin key on the running
+  container.
+- Confirmed via `git log -3 --oneline` that both fixes are genuinely
+  committed and pushed (`928a671`, `HEAD -> main, origin/main,
+  origin/HEAD` all aligned) -- not just assumed clean from an empty
+  Source Control panel.
+- Minor process notes: VS Code occasionally shows a stale "M" (modified)
+  indicator on a tab with no real unsaved changes -- confirmed by
+  attempting to close the tab and getting no save prompt, meaning
+  nothing was actually pending. Also: `pip install llm-guard` fails on
+  Windows/Python 3.14 trying to build `sentencepiece` from source (no
+  C++ build toolchain) -- irrelevant to the actual project, since
+  `llm-guard` only ever needs to install inside the Linux-based Docker
+  container, where prebuilt wheels exist; this was an unnecessary,
+  purely cosmetic step (silencing local Pylance import warnings) that
+  should not be repeated.
+
 
