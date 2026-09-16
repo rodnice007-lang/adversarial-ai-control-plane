@@ -617,4 +617,55 @@ the sections above are the standing summary, updated less often.
   this entry -- this journal is the resolved source of truth on this
   specific point until that other document gets updated to match, if it
   ever does.
+- **Major milestone confirmed: the Minisforum migration actually
+  happened.** This was tracked across at least one separate,
+  previously-unreconciled chat ("Topology and future setup exploration")
+  spanning roughly 2026-09-04 through the actual wipe -- not narrated in
+  this journal until now, same "parallel chat" pattern already flagged
+  for the switch decision and `homelab-build-plan.docx`.
+  - **OS: Ubuntu 26.04.1 LTS, confirmed final.** This corrects an
+    earlier back-and-forth in this same session -- the original
+    migration planning (in that other chat) had deliberately pinned to
+    24.04 LTS / ROCm 7.2.1 for stability, explicitly rejecting newer
+    releases as untested on a 24/7 host. That reasoning was sound *at
+    the time*, but the actual execution evidently moved to 26.04.1 with
+    **ROCm 7.2.4** (package build `7.2.4.70204-93~24.04`) once that
+    became the real, current target -- confirmed directly by the user as
+    the true current state, not the diagram's unverified claim. **Fully
+    verified and reconciled:** `lsb_release -a` on the actual machine
+    confirms `Ubuntu 26.04.1 LTS, codename resolute` -- definitive,
+    straight from the OS itself, not secondhand. The `~24.04` /
+    `noble/main` ROCm package suffix isn't a misconfiguration or a sign
+    the OS version was wrong -- AMD simply hasn't shipped a native
+    26.04-targeted ROCm build yet, so the system is pulling the
+    24.04-built packages instead, which are working correctly in
+    practice (confirmed via `rocm-smi` showing the RX 9070 XT). Common,
+    sensible situation when running an OS release slightly ahead of a
+    hardware vendor's own packaging.
+  - **RX 9070 XT: confirmed detected and working**, via `rocm-smi`. This
+    resolves a real, documented hardware issue from the migration chat --
+    the GPU was not showing up in `lspci` at all at one point, flagged
+    as a physical connection problem, not something a reboot alone would
+    fix. Whatever the actual fix was (reseating the OCuLink connection
+    was the troubleshooting step suggested at the time) is not visible
+    in this journal, but the end state is confirmed working now.
+  - **Windows 11 Pro is not deleted, but not dual-booting either.** The
+    system boots directly to Ubuntu every time by default, with no
+    boot-menu prompt during normal use -- Windows still exists as a
+    fallback/recovery option, not actively coexisting day to day. This
+    is more precise than "full wipe" (what was originally answered) or
+    "dual-boot" (what the boot-order fix in the other chat suggested) --
+    it's closer to "Ubuntu-only in practice, Windows kept as insurance."
+  - **Reported as fully operational**, with the control plane stack
+    redeployed and "exceptional" inference speeds observed on the new
+    hardware. Not independently verified in this journal's own context
+    -- logged as reported, not witnessed, consistent with this journal's
+    standard of not asserting things it can't actually confirm.
+  - **Still unconfirmed, worth checking rather than assuming done:**
+    whether `docker-compose.minisforum.yml`'s GPU block (still written
+    for the general ROCm device-passthrough pattern) matches what's
+    actually running, and whether the isolation trigger and RBAC have
+    been re-verified on this new host the way the original runbook
+    called for -- today's verified Windows/laptop fixes don't
+    automatically confirm anything about this separate machine.
 
